@@ -6,28 +6,27 @@ import requests
 import json
 
 
-# Конфигурация
 VECTORSTORE_PATH = Path("data/vectorstore/faiss")
 EMBEDDING_MODEL = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
-print("🔄 Загружаем индекс...")
+print("Загружаем индекс")
+
 embeddings = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
 vectorstore = FAISS.load_local(
     str(VECTORSTORE_PATH),
     embeddings,
     allow_dangerous_deserialization=True
 )
-print(f"✅ Индекс загружен, чанков: {vectorstore.index.ntotal}")
 
-def ask_question(query, k=3):  # берём только 1 чанк для безопасности
-    print(f"⏳ Ищем релевантные чанки для: '{query}'...")
+print(f"Индекс загружен, чанков: {vectorstore.index.ntotal}")
+
+def ask_question(query, k=3):
+    print(f"Ищем релевантные чанки для: '{query}'...")
+
     docs = vectorstore.similarity_search(query, k=k)
-    
-    # Формируем контекст из найденных чанков
     context = "\n\n".join([doc.page_content for doc in docs])
-    
-    # Собираем промпт
+
     prompt = f"""
 Ты - эксперт в банковской сфере и документации. 
 Ответь на вопрос, используя информацию только из предоставленного контекста.
@@ -41,7 +40,6 @@ def ask_question(query, k=3):  # берём только 1 чанк для бе�
 Ответ:
 """
     
-    # Отправляем запрос в Ollama
     payload = {
         "model": "mistral",
         "prompt": prompt,
@@ -52,29 +50,33 @@ def ask_question(query, k=3):  # берём только 1 чанк для бе�
         }
     }
     
-    print("⏳ Отправляем запрос в Ollama...")
+    print("Отправляем запрос в Ollama")
     try:
         response = requests.post(OLLAMA_URL, json=payload, timeout=60)
-        if response.status_code == 200:
+
+        if (response.status_code == 200):
             result = response.json()
             answer = result.get("response", "").strip()
             
-            print(f"\n❓ Вопрос: {query}\n")
-            print(f"💬 Ответ: {answer}\n")
-            print("📚 Источники:")
+            print(f"\n Вопрос: {query}\n")
+            print(f"Ответ: {answer}\n")
+            print("Источники:")
+
             for i, doc in enumerate(docs):
                 source = doc.metadata.get("source", "Неизвестно")
                 page = doc.metadata.get("page", "?")
                 print(f"   {i+1}. {source} (стр. {page})")
             return answer
         else:
-            print(f"❌ Ошибка: статус {response.status_code}")
+            print(f"Ошибка: статус {response.status_code}")
             print(response.text)
+
             return None
     except Exception as e:
-        print(f"❌ Ошибка при запросе: {e}")
+        print(f"Ошибка при запросе: {e}")
+
         return None
 
-if __name__ == "__main__":
+if (__name__ == "__main__"):
     question = 'Какова чистая прибыль ВТБ в 2023 год?'
     ask_question(question)

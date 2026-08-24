@@ -15,5 +15,5 @@ docs = vectorstore.similarity_search(query, k = 3)
 
 for (i, doc) in enumerate(docs):
     print(f"--- Чанк {i+1} (из {doc.metadata.get('source', 'Unknown')}) ---")
-    print(doc.page_content[:500])  # Показываем первые 500 символов
+    print(doc.page_content[:500])
     print("-" * 50)
