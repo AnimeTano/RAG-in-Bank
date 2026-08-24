@@ -1,4 +1,4 @@
-import os 
+import re
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -15,10 +15,16 @@ documents = []
 
 
 # Подгружаем pdf-ки
-for file_path in DATA_PATH.glob('*.pdf'):
-    print(f' - Загружаем: {file_path.name}')
+for file_path in DATA_PATH.glob("*.pdf"):
+    year_match = re.search(r'(\d{4})', file_path.stem)
+    year = int(year_match.group(1)) if (year_match) else None
+
     loader = PyPDFLoader(str(file_path))
-    documents.extend(loader.load())
+    docs = loader.load()
+    
+    for doc in docs:
+        doc.metadata["year"] = year   # ключевое поле
+    documents.extend(docs)
 
 for file_path in DATA_PATH.glob('*.txt'):
     print(f' - Загружаем: {file_path.name}')
@@ -30,8 +36,8 @@ print(f"Loaded pages: {len(documents)}")
 # Чанкование документов
 
 text_splitter = RecursiveCharacterTextSplitter(
-    chunk_size = 1000,
-    chunk_overlap = 200,
+    chunk_size = 1500,
+    chunk_overlap = 450,
     length_function = len,
     separators = ["\n\n", "\n", " ", ""]
 )
