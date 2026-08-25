@@ -2,6 +2,8 @@ import json, requests, re
 from pathlib import Path
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
+from rank_bm25 import BM25Okapi
 from sentence_transformers import CrossEncoder
 
 
@@ -9,7 +11,7 @@ VECTORSTORE_PATH = Path("data/vectorstore/faiss")
 EMBEDDING_MODEL = 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
 OLLAMA_URL = "http://localhost:11434/api/generate"
 TEST_QUESTIONS_PATH = Path("evaluation/test_questions.json")
-OUTPUT_METRICS_PATH = Path("evaluation/report.json")
+OUTPUT_METRICS_PATH = Path("evaluation/report_hybrid_search.json")
 
 
 def load_vectorstore():
@@ -20,12 +22,51 @@ def load_vectorstore():
         allow_dangerous_deserialization = True
     )
 
-    return vectorstore
+    with open('data/processed/chunks.json', 'r', encoding='utf-8') as f:
+        chunks_metadata = json.load(f)
+
+    texts = [chunk['text'] for chunk in chunks_metadata]
+    tokenized_texts = [text.split() for text in texts]
+    bm25 = BM25Okapi(tokenized_texts)
+
+    return vectorstore, bm25, chunks_metadata
 
 def extract_year(question):
     match = re.search(r'\b(20\d{2})\b', question)
 
     return int(match.group(1)) if (match) else None
+
+def hybrid_search_metrics(question, vectorstore, bm25, chunks_metadata, k=5):
+    """
+    Гибридный поиск для метрик
+    """
+    faiss_docs = vectorstore.similarity_search(question, k=k*3)
+
+    tokenized_q = question.split()
+    scores = bm25.get_scores(tokenized_q)
+    sorted_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)
+    indices = sorted_indices[:k*3]
+    docs = []
+
+    for idx in indices:
+        chunk = chunks_metadata[idx]
+        doc = Document(page_content=chunk['text'], metadata=chunk['metadata'])
+        docs.append(doc)
+
+    seen = set()
+    combined = []
+
+    for doc in faiss_docs:
+        text = doc.page_content
+        if (text not in seen):
+            seen.add(text)
+            combined.append(doc)
+    for doc in docs:
+        text = doc.page_content
+        if (text not in seen):
+            seen.add(text)
+            combined.append(doc)
+    return combined[:k]
 
 def get_retrieved_docs(question, vectorstore, k=5):
     year = extract_year(question)
@@ -65,7 +106,7 @@ def is_relevant(doc, relevant_docs, expected_answer=""):
             return len(common) / max(len(words_expected), 1) > 0.5
     return True
 
-def compute_metrics(questions, vectorstore, k_list = [1,3,5]):
+def compute_metrics(questions, vectorstore, bm25, chunks_metadata, k_list = [1,3,5]):
     """
     Вычисляет Precision@K, MRR, Recall@K для каждого вопроса
     """
@@ -76,7 +117,7 @@ def compute_metrics(questions, vectorstore, k_list = [1,3,5]):
         relevant_docs = q.get("relevant_docs", [])
         expected = q.get("expected_answer", "")
         
-        docs = get_retrieved_docs(question, vectorstore, k = max(k_list))
+        docs = hybrid_search_metrics(question, vectorstore, bm25, chunks_metadata, k = max(k_list))
         relevances = [is_relevant(doc, relevant_docs, expected) for doc in docs]
         
         precision_at_k, recall_at_k = {}, {}
@@ -183,12 +224,12 @@ def evaluate_answers(questions, vectorstore, compute_llm=False):
     return questions
 
 def main():
-    vectorstore = load_vectorstore()
+    vectorstore, bm25, chunks_metadata = load_vectorstore()
 
     with open(TEST_QUESTIONS_PATH, 'r', encoding='utf-8') as f:
         questions = json.load(f)
     
-    metrics = compute_metrics(questions, vectorstore, k_list=[1,3,5])
+    metrics = compute_metrics(questions, vectorstore, bm25, chunks_metadata, k_list=[1,3,5])
 
     metrics["questions_with_answers"] = questions
     
