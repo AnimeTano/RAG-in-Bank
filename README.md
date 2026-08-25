@@ -100,7 +100,7 @@ streamlit run app/streamlit_app.py
 
 ## Демонстрация 
 
-(Добавлю позже)
+
 
 ---
 
