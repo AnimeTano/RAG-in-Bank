@@ -100,7 +100,7 @@ streamlit run app/streamlit_app.py
 
 ## Демонстрация 
 
-![Демо-скриншот](screenshots/demo_version.jpg)
+![Демо-скриншот №1](screenshots/demo_version.jpg)
 
 ---
 
