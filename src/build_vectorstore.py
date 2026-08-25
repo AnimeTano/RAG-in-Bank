@@ -1,4 +1,4 @@
-import re
+import re, json
 from pathlib import Path
 from langchain_community.document_loaders import PyPDFLoader, TextLoader
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -52,3 +52,7 @@ vectorstore = FAISS.from_documents(chunks, embeddings)
 print(F'Save indexes to {VECTORSTORE_PATH}')
 vectorstore.save_local(str(VECTORSTORE_PATH))
 print('Index created and saved')
+
+chunks_metadata = [{'text': chunk.page_content, 'metadata': chunk.metadata} for chunk in chunks]
+with open("data/processed/chunks.json", 'w', encoding = 'utf-8') as f:
+    json.dump(chunks_metadata, f, ensure_ascii = False, indent = 2)
